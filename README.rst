@@ -57,6 +57,26 @@ Work with tree as with plain mapping:
     assert len(t) == 1
 
 
+Iteration over each element of tree:
+
+::
+
+    from pyart import Tree
+    t = Tree()
+    t['foo'] = object()
+    def cb(key, value): print(key, value)
+    t.each(cb)
+    >>> ('foo', <object object at 0x7f186020bd70>)
+    t['foobar'] = object()
+    t.each(cb)
+    >>> ('foo', <object object at 0x7f186020bd70>)
+    >>> ('foobar', <object object at 0x7f186020bd80>)
+    t.each(cb, prefix=b'foo')
+    >>> ('foo', <object object at 0x7f186020bd70>)
+    >>> ('foobar', <object object at 0x7f186020bd80>)
+    t.each(cb, prefix=b'bar')
+
+
 Find minimum and maximum:
 
 ::
@@ -79,6 +99,12 @@ Copy tree:
     c = t.copy()
     assert c[b'test'] is t[b'test']
     assert len(c) == len(t)
+
+
+TODO
+====
+
+- Implement plain python iterator over tree;
 
 
 Running the test suite

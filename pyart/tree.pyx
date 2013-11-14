@@ -45,6 +45,11 @@ cdef int decref_object(void *data, const char *key, uint32_t key_len, void *valu
     return 0
 
 
+cdef int invoke_object(void *data, const char *key, uint32_t key_len, void *value):
+    (<object>data)(key[:key_len], <object>value)
+    return 0
+
+
 cdef class Tree(object):
     cdef int _initialized
     cdef art_tree *_c_tree
@@ -111,8 +116,17 @@ cdef class Tree(object):
             cdef art_leaf* c_leaf = art_maximum(self._c_tree)
             return (c_leaf.key[:c_leaf.key_len], <object>c_leaf.value)
 
+    def each(self, callback, bytes prefix=None):
+        cdef char* c_prefix
+        cdef Py_ssize_t prefix_len
+        if prefix is None:
+            art_iter(self._c_tree, invoke_object, <void *>callback)
+        else:
+            c_prefix = prefix
+            prefix_len = len(prefix)
+            art_iter_prefix(self._c_tree, c_prefix, prefix_len, invoke_object, <void *>callback)
+
     def copy(self):
-        # TODO: incref all python objects
         cdef Tree dst = Tree()
         if art_copy(dst._c_tree, self._c_tree) != 0:
             raise RuntimeError("Tree copy failed!")

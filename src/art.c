@@ -898,6 +898,18 @@ int art_iter_prefix(art_tree *t, char *key, int key_len, art_callback cb, void *
     return 0;
 }
 
+
+// Copy a leaf node
+static art_leaf* copy_leaf(art_leaf *source) {
+    art_leaf *dst = malloc(sizeof(art_leaf)+source->key_len);
+    dst->ref_count = source->ref_count;
+    dst->value = source->value;
+    dst->key_len = source->key_len;
+    memcpy(dst->key, source->key, source->key_len);
+    return dst;
+}
+
+
 // Recursively copies a tree
 static art_node* recursive_copy(art_node *n) {
     // Handle the NULL nodes
@@ -905,9 +917,11 @@ static art_node* recursive_copy(art_node *n) {
 
     // Handle leaves
     if (IS_LEAF(n)) {
+	// Copy leaf
+	n = (art_node*)SET_LEAF(copy_leaf(LEAF_RAW(n)));
         // Re-use leaf, increment ref-count
-        art_leaf *l = LEAF_RAW(n);
-        __sync_fetch_and_add(&l->ref_count, 1);
+        //art_leaf *l = LEAF_RAW(n);
+        //__sync_fetch_and_add(&l->ref_count, 1);
         return n;
     }
 
