@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "ngx-queue.h"
 #ifndef ART_H
 #define ART_H
 
@@ -76,6 +77,16 @@ typedef struct {
     art_node *root;
     uint64_t size;
 } art_tree;
+
+/**
+ * Iterator over ART tree.
+ */
+typedef struct {
+    art_node *node;
+    uint32_t pos;
+    ngx_queue_t queue;
+} art_iterator;
+
 
 /**
  * Initializes an ART tree
@@ -169,13 +180,30 @@ int art_iter_prefix(art_tree *t, char *prefix, int prefix_len, art_callback cb, 
  * Creates a copy of an ART tree. The two trees will
  * share the internal leaves, but will NOT share internal nodes.
  * This allows leaves to be added and deleted from each tree
- * individually. It is important that concurrent updates to
- * a given key has no well defined behavior since the leaves are
- * shared.
+ * individually.
+ *
  * @arg dst The destination tree. Not initialized yet.
  * @arg src The source tree, must be initialized.
  * @return 0 on success.
  */
 int art_copy(art_tree *dst, art_tree *src);
+
+/**
+ * Create and initializes an ART tree iterator.
+ * @return 0 on success.
+ */
+art_iterator* create_art_iterator(art_tree *tree);
+
+/**
+ * Destroys an ART tree iterator.
+ * @return 0 on success.
+ */
+int destroy_art_iterator(art_iterator *iterator);
+
+/**
+ * Return next leaf element.
+ * @return The next leaf or NULL
+ */
+art_leaf* art_iterator_next(art_iterator *iterator); 
 
 #endif

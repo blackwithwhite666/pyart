@@ -23,6 +23,16 @@ class TestTree(TestCase):
         self.tree[b'foo'] = object()
         self.assertTrue(self.tree[b'foo'] is self.tree[b'foo'])
 
+    def test_for_none(self):
+        with self.assertRaises(TypeError):
+            self.tree[None]
+        with self.assertRaises(TypeError):
+            self.tree[None] = 1
+        with self.assertRaises(TypeError):
+            del self.tree[None]
+        with self.assertRaises(TypeError):
+            None in self.tree
+
     def test_mapping(self):
         self.tree[b'foo'] = 1
         self.tree[b'bar'] = 2
@@ -46,7 +56,7 @@ class TestTree(TestCase):
             (b'foo', 1),
         ], cb.result)
 
-        self.tree['foobar'] = 2
+        self.tree[b'foobar'] = 2
 
         cb = Callback()
         self.tree.each(cb)
@@ -72,6 +82,25 @@ class TestTree(TestCase):
         self.tree.each(cb, prefix=b'bar')
         self.assertEqual([], cb.result)
 
+    def test_each_exception(self):
+        class CustomException(Exception):
+            pass
+
+        self.tree[b'bar'] = 1
+        self.tree[b'foo'] = 2
+        calls = []
+
+        def inner_cb(*args):
+            calls.append(args)
+            raise CustomException()
+
+        with self.assertRaises(CustomException):
+            self.tree.each(inner_cb)
+
+        self.assertEqual([
+            (b'bar', 1),
+        ], calls)
+
     def test_min_max_key(self):
         self.tree[b'test'] = None
         self.tree[b'foo'] = None
@@ -93,3 +122,10 @@ class TestTree(TestCase):
         self.assertTrue(b'foo' not in another_tree)
         self.assertTrue(b'foo' in self.tree)
 
+    def test_iter(self):
+        self.tree[b'foo'] = 1
+        self.tree[b'bar'] = 2
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            list(self.tree)
+        )
