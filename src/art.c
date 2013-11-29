@@ -1038,31 +1038,29 @@ int destroy_art_iterator(art_iterator *iterator) {
 art_leaf* art_iterator_next(art_iterator *iterator) {
     ngx_queue_t *q;
     art_iterator *c;
-    art_node *n;
+    art_node *n, *next;
 
     q = ngx_queue_head(&iterator->queue);
     c = ngx_queue_data(q, art_iterator, queue);
     n = c->node;
-    int i = 0;
 
     int idx;
     do {
-        i++;
-        if (i > 100) return NULL;
+        next = NULL;
 
         // get next node from current
         switch (n->type) {
             case NODE4:
                 for (; c->pos < n->num_children; c->pos++) {
-                    n = ((art_node4*)n)->children[c->pos];
-                    if (n) break;
+                    next = ((art_node4*)n)->children[c->pos];
+                    if (next) break;
                 }
                 break;
 
             case NODE16:
                 for (; c->pos < n->num_children; c->pos++) {
-                    n = ((art_node16*)n)->children[c->pos];
-                    if (n) break;
+                    next = ((art_node16*)n)->children[c->pos];
+                    if (next) break;
                 }
                 break;
 
@@ -1071,21 +1069,23 @@ art_leaf* art_iterator_next(art_iterator *iterator) {
                     idx = ((art_node48*)n)->keys[c->pos];
                     if (!idx) continue;
 
-                    n = ((art_node48*)n)->children[idx-1];
-                    if (n) break;
+                    next = ((art_node48*)n)->children[idx-1];
+                    if (next) break;
                 }
                 break;
 
             case NODE256:
                 for (; c->pos < 256; c->pos++) {
-                    n = ((art_node256*)n)->children[c->pos];
-                    if (n) break;
+                    next = ((art_node256*)n)->children[c->pos];
+                    if (next) break;
                 }
                 break;
 
             default:
                 abort();
         }
+        n = next;
+        c->pos++;
 
         if (!n) {
             // no child found
@@ -1117,6 +1117,4 @@ art_leaf* art_iterator_next(art_iterator *iterator) {
         }
 
     } while (1);
-
-    return NULL;
 }

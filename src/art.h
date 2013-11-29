@@ -83,7 +83,7 @@ typedef struct {
  */
 typedef struct {
     art_node *node;
-    uint8_t pos;
+    uint32_t pos;
     ngx_queue_t queue;
 } art_iterator;
 
