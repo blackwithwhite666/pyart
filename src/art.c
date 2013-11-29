@@ -5,6 +5,7 @@
 #include <emmintrin.h>
 #include <assert.h>
 #include "art.h"
+#include "ngx-queue.h"
 
 /**
  * Macros to manipulate pointer tags
@@ -917,8 +918,8 @@ static art_node* recursive_copy(art_node *n) {
 
     // Handle leaves
     if (IS_LEAF(n)) {
-	// Copy leaf
-	n = (art_node*)SET_LEAF(copy_leaf(LEAF_RAW(n)));
+        // Copy leaf
+        n = (art_node*)SET_LEAF(copy_leaf(LEAF_RAW(n)));
         // Re-use leaf, increment ref-count
         //art_leaf *l = LEAF_RAW(n);
         //__sync_fetch_and_add(&l->ref_count, 1);
@@ -989,3 +990,133 @@ int art_copy(art_tree *dst, art_tree *src) {
     return 0;
 }
 
+/**
+ * Initializes an ART tree iterator.
+ * @return Pointer to iterator or NULL.
+ */
+art_iterator* create_art_iterator(art_tree *tree) {
+    art_iterator* iterator = malloc(sizeof(art_iterator));
+    if (iterator == NULL) {
+        return NULL;
+    }
+    iterator->node = tree->root;
+    iterator->pos = 0;
+    ngx_queue_init(&iterator->queue);
+    return iterator;
+}
+
+/**
+ * Remove all queue's element and free memory.
+ */
+static void destroy_queue(ngx_queue_t *queue) {
+    ngx_queue_t *q;
+    art_iterator *iterator;
+
+    for (q = ngx_queue_head(queue);
+         q != ngx_queue_sentinel(queue);
+         q = ngx_queue_next(q))
+    {
+        iterator = ngx_queue_data(q, art_iterator, queue);
+        free(iterator);
+    }
+}
+
+/**
+ * Destroys an ART iterator.
+ * @return 0 on success.
+ */
+int destroy_art_iterator(art_iterator *iterator) {
+    destroy_queue(&iterator->queue);
+    free(iterator);
+    return 0;
+}
+
+/**
+ * Return next leaf element.
+ * @return The next leaf or NULL
+ */
+art_leaf* art_iterator_next(art_iterator *iterator) {
+    ngx_queue_t *q;
+    art_iterator *c;
+    art_node *n;
+
+    q = ngx_queue_head(&iterator->queue);
+    c = ngx_queue_data(q, art_iterator, queue);
+    n = c->node;
+    int i = 0;
+
+    int idx;
+    do {
+        i++;
+        if (i > 100) return NULL;
+
+        // get next node from current
+        switch (n->type) {
+            case NODE4:
+                for (; c->pos < n->num_children; c->pos++) {
+                    n = ((art_node4*)n)->children[c->pos];
+                    if (n) break;
+                }
+                break;
+
+            case NODE16:
+                for (; c->pos < n->num_children; c->pos++) {
+                    n = ((art_node16*)n)->children[c->pos];
+                    if (n) break;
+                }
+                break;
+
+            case NODE48:
+                for (; c->pos < 256; c->pos++) {
+                    idx = ((art_node48*)n)->keys[c->pos];
+                    if (!idx) continue;
+
+                    n = ((art_node48*)n)->children[idx-1];
+                    if (n) break;
+                }
+                break;
+
+            case NODE256:
+                for (; c->pos < 256; c->pos++) {
+                    n = ((art_node256*)n)->children[c->pos];
+                    if (n) break;
+                }
+                break;
+
+            default:
+                abort();
+        }
+
+        if (!n) {
+            // no child found
+            if (ngx_queue_empty(q)) {
+                // queue empty, work is done
+                return NULL;
+            }
+            // destroy current iterator
+            ngx_queue_remove(q);
+            free(c);
+            // no children left, go to previous node
+            q = ngx_queue_head(&iterator->queue);
+            c = ngx_queue_data(q, art_iterator, queue);
+            n = c->node;
+            continue;
+        }
+
+        if (IS_LEAF(n)) {
+            // we found leaf, return
+            return LEAF_RAW(n);
+        } else {
+            // we found node, go into
+            c = malloc(sizeof(art_iterator));
+            if (!c) return NULL;
+            c->pos = 0;
+            c->node = n;
+            ngx_queue_insert_tail(q, &c->queue);
+            q = &c->queue;
+        }
+
+    } while (1);
+
+    return NULL;
+}
