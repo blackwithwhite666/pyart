@@ -1,5 +1,6 @@
 from libc.stdlib cimport malloc, free
 from cpython.ref cimport Py_INCREF, Py_DECREF
+from cpython.list cimport PyList_New, PyList_SET_ITEM
 
 
 cdef extern from "stdint.h" nogil:
@@ -69,6 +70,19 @@ cdef int walk_tree(art_tree *c_tree, object callback, bytes prefix=None) except 
         return art_iter_prefix(c_tree, c_prefix, prefix_len, invoke_object, <void *>callback)
 
 
+cdef object populate_list(Iterator iterator, Py_ssize_t size):
+    cdef int i
+    cdef object obj
+    cdef list l = PyList_New(size)
+    for i in range(size):
+        obj = iterator.pop()
+        if obj is None:
+            break
+        Py_INCREF(obj)
+        PyList_SET_ITEM(l, i, obj)
+    return l
+
+
 cdef class Tree(object):
     cdef art_tree *_c_tree
 
@@ -85,8 +99,11 @@ cdef class Tree(object):
             destroy_art_tree(self._c_tree)
             free(self._c_tree)
 
-    def __len__(self):
+    cdef Py_ssize_t size(self):
         return art_size(self._c_tree)
+
+    def __len__(self):
+        return self.size()
 
     def __getitem__(self, bytes key not None):
         cdef char* c_key = key
@@ -144,23 +161,60 @@ cdef class Tree(object):
     def __iter__(self):
         return Iterator(self)
 
+    cpdef iterkeys(self):
+        return Iterator(self,
+            return_keys=True)
+
+    cpdef itervalues(self):
+        return Iterator(self,
+            return_values=True)
+
+    cpdef iteritems(self):
+        return Iterator(self,
+            return_keys=True,
+            return_values=True)
+
+    def keys(self):
+        return populate_list(self.iterkeys(), self.size())
+
+    def values(self):
+        return populate_list(self.itervalues(), self.size())
+
+    def items(self):
+        return populate_list(self.iteritems(), self.size())
+
 
 cdef class Iterator(object):
     cdef art_iterator *_c_iterator
+    cdef bint return_keys
+    cdef bint return_values
 
-    def __cinit__(self, Tree tree not None):
+    def __cinit__(self, Tree tree not None, return_keys=None, return_values=None):
         self._c_iterator = create_art_iterator(tree._c_tree)
         if self._c_iterator is NULL:
             raise MemoryError("Can't allocate memory for iterator!")
+        self.return_keys = bool(return_keys)
+        self.return_values = bool(return_values)
 
     def __iter__(self):
         return self
 
-    def __next__(self):
+    cdef object pop(self):
         cdef art_leaf* c_leaf = art_iterator_next(self._c_iterator)
         if c_leaf is NULL:
+            return None
+        if self.return_keys and self.return_values:
+            return (c_leaf.key[:c_leaf.key_len], <object>c_leaf.value)
+        elif self.return_values:
+            return <object>c_leaf.value
+        else:
+            return c_leaf.key[:c_leaf.key_len]
+
+    def __next__(self):
+        cdef object obj = self.pop()
+        if obj is None:
             raise StopIteration()
-        return (c_leaf.key[:c_leaf.key_len], <object>c_leaf.value)
+        return obj
 
     def __dealloc__(self):
         if self._c_iterator is not NULL:

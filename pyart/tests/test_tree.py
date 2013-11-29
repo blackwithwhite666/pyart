@@ -126,6 +126,30 @@ class TestTree(TestCase):
         self.tree[b'foo'] = 1
         self.tree[b'bar'] = 2
         self.assertEqual(
-            [(b'bar', 2), (b'foo', 1)],
+            [b'bar', b'foo'],
             list(self.tree)
+        )
+        self.assertEqual(
+            [b'bar', b'foo'],
+            list(self.tree.iterkeys())
+        )
+        self.assertEqual(
+            [2, 1],
+            list(self.tree.itervalues())
+        )
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            list(self.tree.iteritems())
+        )
+        self.assertEqual(
+            [b'bar', b'foo'],
+            self.tree.keys()
+        )
+        self.assertEqual(
+            [2, 1],
+            self.tree.values()
+        )
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            self.tree.items()
         )
