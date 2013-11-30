@@ -14,30 +14,45 @@
 #define SET_LEAF(x) ((void*)((uintptr_t)x | 1))
 #define LEAF_RAW(x) ((void*)((uintptr_t)x & ~1))
 
+
 /**
- * Allocates a node of the given type,
+ * Allocates a node4,
  * initializes to zero and sets the type.
  */
-static art_node* alloc_node(uint8_t type) {
-    art_node* n;
-    switch (type) {
-        case NODE4:
-            n = calloc(1, sizeof(art_node4));
-            break;
-        case NODE16:
-            n = calloc(1, sizeof(art_node16));
-            break;
-        case NODE48:
-            n = calloc(1, sizeof(art_node48));
-            break;
-        case NODE256:
-            n = calloc(1, sizeof(art_node256));
-            break;
-        default:
-            abort();
-    }
-    n->type = type;
-    return n;
+static inline art_node4* alloc_node4(void) {
+    art_node4* node = calloc(1, sizeof(art_node4));
+    node->n.type = NODE4;
+    return node;
+}
+
+/**
+ * Allocates a node16,
+ * initializes to zero and sets the type.
+ */
+static inline art_node16* alloc_node16(void) {
+    art_node16* node = calloc(1, sizeof(art_node16));
+    node->n.type = NODE16;
+    return node;
+}
+
+/**
+ * Allocates a node48,
+ * initializes to zero and sets the type.
+ */
+static inline art_node48* alloc_node48(void) {
+    art_node48* node = calloc(1, sizeof(art_node48));
+    node->n.type = NODE48;
+    return node;
+}
+
+/**
+ * Allocates a node256,
+ * initializes to zero and sets the type.
+ */
+static inline art_node256* alloc_node256(void) {
+    art_node256* node = calloc(1, sizeof(art_node256));
+    node->n.type = NODE256;
+    return node;
 }
 
 /**
@@ -57,11 +72,7 @@ static void destroy_node(art_node *n) {
 
     // Special case leafs
     if (IS_LEAF(n)) {
-        // Only release the leaf if the ref count hits zero
-        art_leaf *l = LEAF_RAW(n);
-        int ref = __sync_sub_and_fetch(&l->ref_count, 1);
-        if (!ref)
-            free(l);
+        free(LEAF_RAW(n));
         return;
     }
 
@@ -323,7 +334,6 @@ art_leaf* art_maximum(art_tree *t) {
 
 static art_leaf* make_leaf(char *key, int key_len, void *value) {
     art_leaf *l = malloc(sizeof(art_leaf)+key_len);
-    l->ref_count = 1;
     l->value = value;
     l->key_len = key_len;
     memcpy(l->key, key, key_len);
@@ -360,7 +370,7 @@ static void add_child48(art_node48 *n, art_node **ref, unsigned char c, void *ch
         n->keys[c] = pos + 1;
         n->n.num_children++;
     } else {
-        art_node256 *new = (art_node256*)alloc_node(NODE256);
+        art_node256 *new = alloc_node256();
         for (int i=0;i<256;i++) {
             if (n->keys[i]) {
                 new->children[i] = n->children[n->keys[i] - 1];
@@ -401,7 +411,7 @@ static void add_child16(art_node16 *n, art_node **ref, unsigned char c, void *ch
         n->n.num_children++;
 
     } else {
-        art_node48 *new = (art_node48*)alloc_node(NODE48);
+        art_node48 *new = alloc_node48();
 
         // Copy the child pointers and populate the key map
         memcpy(new->children, n->children,
@@ -434,7 +444,7 @@ static void add_child4(art_node4 *n, art_node **ref, unsigned char c, void *chil
         n->n.num_children++;
 
     } else {
-        art_node16 *new = (art_node16*)alloc_node(NODE16);
+        art_node16 *new = alloc_node16();
 
         // Copy the child pointers and the key map
         memcpy(new->children, n->children,
@@ -488,6 +498,7 @@ static int prefix_mismatch(art_node *n, char *key, int key_len, int depth) {
 }
 
 static void* recursive_insert(art_node *n, art_node **ref, char *key, int key_len, void *value, int depth, int *old) {
+
     // If we are at a NULL node, inject a leaf
     if (!n) {
         *ref = (art_node*)SET_LEAF(make_leaf(key, key_len, value));
@@ -507,7 +518,7 @@ static void* recursive_insert(art_node *n, art_node **ref, char *key, int key_le
         }
 
         // New value, we must split the leaf into a node4
-        art_node4 *new = (art_node4*)alloc_node(NODE4);
+        art_node4 *new = alloc_node4();
 
         // Create a new leaf
         art_leaf *l2 = make_leaf(key, key_len, value);
@@ -518,8 +529,13 @@ static void* recursive_insert(art_node *n, art_node **ref, char *key, int key_le
         memcpy(new->n.partial, key+depth, min(MAX_PREFIX_LEN, longest_prefix));
         // Add the leafs to the new node4
         *ref = (art_node*)new;
-        add_child4(new, ref, l->key[depth+longest_prefix], SET_LEAF(l));
-        add_child4(new, ref, l2->key[depth+longest_prefix], SET_LEAF(l2));
+        // Check bounds, prefix length can be equal to key length (foo and foobar)
+        add_child4(new, ref,
+            l->key_len > depth+longest_prefix ? l->key[depth+longest_prefix] : 0x00,
+            SET_LEAF(l));
+        add_child4(new, ref,
+            l2->key_len > depth+longest_prefix ? l2->key[depth+longest_prefix] : 0x00,
+            SET_LEAF(l2));
         return NULL;
     }
 
@@ -533,7 +549,7 @@ static void* recursive_insert(art_node *n, art_node **ref, char *key, int key_le
         }
 
         // Create a new node
-        art_node4 *new = (art_node4*)alloc_node(NODE4);
+        art_node4 *new = alloc_node4();
         *ref = (art_node*)new;
         new->n.partial_len = prefix_diff;
         memcpy(new->n.partial, n->partial, min(MAX_PREFIX_LEN, prefix_diff));
@@ -595,7 +611,7 @@ static void remove_child256(art_node256 *n, art_node **ref, unsigned char c) {
     // Resize to a node48 on underflow, not immediately to prevent
     // trashing if we sit on the 48/49 boundary
     if (n->n.num_children == 37) {
-        art_node48 *new = (art_node48*)alloc_node(NODE48);
+        art_node48 *new = alloc_node48();
         *ref = (art_node*)new;
         copy_header((art_node*)new, (art_node*)n);
 
@@ -618,7 +634,7 @@ static void remove_child48(art_node48 *n, art_node **ref, unsigned char c) {
     n->n.num_children--;
 
     if (n->n.num_children == 12) {
-        art_node16 *new = (art_node16*)alloc_node(NODE16);
+        art_node16 *new = alloc_node16();
         *ref = (art_node*)new;
         copy_header((art_node*)new, (art_node*)n);
 
@@ -642,7 +658,7 @@ static void remove_child16(art_node16 *n, art_node **ref, art_node **l) {
     n->n.num_children--;
 
     if (n->n.num_children == 3) {
-        art_node4 *new = (art_node4*)alloc_node(NODE4);
+        art_node4 *new = alloc_node4();
         *ref = (art_node*)new;
         copy_header((art_node*)new, (art_node*)n);
         memcpy(new->keys, n->keys, 4);
@@ -717,7 +733,7 @@ static art_leaf* recursive_delete(art_node *n, art_node **ref, char *key, int ke
         if (prefix_len != min(MAX_PREFIX_LEN, n->partial_len)) {
             return NULL;
         }
-        depth = depth + n->partial_len;
+        depth += n->partial_len;
     }
 
     // Find child node
@@ -734,9 +750,9 @@ static art_leaf* recursive_delete(art_node *n, art_node **ref, char *key, int ke
         return NULL;
 
     // Recurse
-    } else {
-        return recursive_delete(*child, child, key, key_len, depth+1);
     }
+
+    return recursive_delete(*child, child, key, key_len, depth+1);
 }
 
 /**
@@ -752,12 +768,7 @@ void* art_delete(art_tree *t, char *key, int key_len) {
     if (l) {
         t->size--;
         void *old = l->value;
-
-        // Only release the leaf if the ref count hits zero
-        int ref = __sync_sub_and_fetch(&l->ref_count, 1);
-        if (!ref)
-            free(l);
-
+        free(l);
         return old;
     }
     return NULL;
@@ -879,11 +890,11 @@ int art_iter_prefix(art_tree *t, char *key, int key_len, art_callback cb, void *
             prefix_len = prefix_mismatch(n, key, key_len, depth);
 
             // If there is no match, search is terminated
-            if (!prefix_len)
+            if (!prefix_len) {
                 return 0;
 
             // If we've matched the prefix, iterate on this node
-            else if (depth + prefix_len == key_len) {
+            } else if (depth + prefix_len == key_len) {
                 return recursive_iter(n, cb, data);
             }
 
@@ -900,17 +911,6 @@ int art_iter_prefix(art_tree *t, char *key, int key_len, art_callback cb, void *
 }
 
 
-// Copy a leaf node
-static art_leaf* copy_leaf(art_leaf *source) {
-    art_leaf *dst = malloc(sizeof(art_leaf)+source->key_len);
-    dst->ref_count = source->ref_count;
-    dst->value = source->value;
-    dst->key_len = source->key_len;
-    memcpy(dst->key, source->key, source->key_len);
-    return dst;
-}
-
-
 // Recursively copies a tree
 static art_node* recursive_copy(art_node *n) {
     // Handle the NULL nodes
@@ -918,55 +918,49 @@ static art_node* recursive_copy(art_node *n) {
 
     // Handle leaves
     if (IS_LEAF(n)) {
+        art_leaf *l = LEAF_RAW(n);
         // Copy leaf
-        n = (art_node*)SET_LEAF(copy_leaf(LEAF_RAW(n)));
-        // Re-use leaf, increment ref-count
-        //art_leaf *l = LEAF_RAW(n);
-        //__sync_fetch_and_add(&l->ref_count, 1);
+        l = make_leaf((char *)l->key, l->key_len, l->value);
+        n = (art_node*)SET_LEAF(l);
         return n;
     }
 
-    union {
-        art_node4 *p1;
-        art_node16 *p2;
-        art_node48 *p3;
-        art_node256 *p4;
-    } p;
+    art_nodes p;
     switch (n->type) {
         case NODE4:
-            p.p1 = (art_node4*)alloc_node(NODE4);
-            copy_header((art_node*)p.p1, n);
-            memcpy(p.p1->keys, ((art_node4*)n)->keys, 4);
+            p.node4 = alloc_node4();
+            copy_header((art_node*)p.node4, n);
+            memcpy(p.node4->keys, ((art_node4*)n)->keys, 4);
             for (int i=0; i < n->num_children; i++) {
-                p.p1->children[i] = recursive_copy(((art_node4*)n)->children[i]);
+                p.node4->children[i] = recursive_copy(((art_node4*)n)->children[i]);
             }
-            return (art_node*)p.p1;
+            return (art_node*)p.node4;
 
         case NODE16:
-            p.p2 = (art_node16*)alloc_node(NODE16);
-            copy_header((art_node*)p.p2, n);
-            memcpy(p.p1->keys, ((art_node16*)n)->keys, 16);
+            p.node16 = alloc_node16();
+            copy_header((art_node*)p.node16, n);
+            memcpy(p.node16->keys, ((art_node16*)n)->keys, 16);
             for (int i=0; i < n->num_children; i++) {
-                p.p2->children[i] = recursive_copy(((art_node16*)n)->children[i]);
+                p.node16->children[i] = recursive_copy(((art_node16*)n)->children[i]);
             }
-            return (art_node*)p.p2;
+            return (art_node*)p.node16;
 
         case NODE48:
-            p.p3 = (art_node48*)alloc_node(NODE48);
-            copy_header((art_node*)p.p3, n);
-            memcpy(p.p3->keys, ((art_node48*)n)->keys, 256);
+            p.node48 = alloc_node48();
+            copy_header((art_node*)p.node48, n);
+            memcpy(p.node48->keys, ((art_node48*)n)->keys, 256);
             for (int i=0; i < n->num_children; i++) {
-                p.p3->children[i] = recursive_copy(((art_node48*)n)->children[i]);
+                p.node48->children[i] = recursive_copy(((art_node48*)n)->children[i]);
             }
-            return (art_node*)p.p3;
+            return (art_node*)p.node48;
 
         case NODE256:
-            p.p4 = (art_node256*)alloc_node(NODE256);
-            copy_header((art_node*)p.p4, n);
+            p.node256 = alloc_node256();
+            copy_header((art_node*)p.node256, n);
             for (int i=0; i < 256; i++) {
-                p.p4->children[i] = recursive_copy(((art_node256*)n)->children[i]);
+                p.node256->children[i] = recursive_copy(((art_node256*)n)->children[i]);
             }
-            return (art_node*)p.p4;
+            return (art_node*)p.node256;
 
         default:
             abort();
@@ -996,7 +990,7 @@ int art_copy(art_tree *dst, art_tree *src) {
  */
 art_iterator* create_art_iterator(art_tree *tree) {
     art_iterator* iterator = malloc(sizeof(art_iterator));
-    if (iterator == NULL) {
+    if (!iterator) {
         return NULL;
     }
     iterator->node = tree->root;
@@ -1012,11 +1006,9 @@ static void destroy_queue(ngx_queue_t *queue) {
     ngx_queue_t *q;
     art_iterator *iterator;
 
-    for (q = ngx_queue_head(queue);
-         q != ngx_queue_sentinel(queue);
-         q = ngx_queue_next(q))
-    {
+    ngx_queue_foreach(q, queue) {
         iterator = ngx_queue_data(q, art_iterator, queue);
+        ngx_queue_remove(q);
         free(iterator);
     }
 }
@@ -1031,91 +1023,85 @@ int destroy_art_iterator(art_iterator *iterator) {
     return 0;
 }
 
+// get next child of node
+static inline art_node* iterator_get_child_node(art_iterator *iterator) {
+    int idx;
+    art_node *next, *node;
+    node = iterator->node;
+    next = NULL;
+    switch (node->type) {
+        case NODE4:
+            for (; iterator->pos < node->num_children; iterator->pos++) {
+                next = ((art_node4*)node)->children[iterator->pos];
+                if (next) break;
+            }
+            break;
+
+        case NODE16:
+            for (; iterator->pos < node->num_children; iterator->pos++) {
+                next = ((art_node16*)node)->children[iterator->pos];
+                if (next) break;
+            }
+            break;
+
+        case NODE48:
+            for (; iterator->pos < 256; iterator->pos++) {
+                idx = ((art_node48*)node)->keys[iterator->pos];
+                if (!idx) continue;
+                next = ((art_node48*)node)->children[idx-1];
+                if (next) break;
+            }
+            break;
+
+        case NODE256:
+            for (; iterator->pos < 256; iterator->pos++) {
+                next = ((art_node256*)node)->children[iterator->pos];
+                if (next) break;
+            }
+            break;
+
+        default:
+            abort();
+    }
+    iterator->pos++;
+    return next;
+}
+
 /**
  * Return next leaf element.
  * @return The next leaf or NULL
  */
 art_leaf* art_iterator_next(art_iterator *iterator) {
+    if (!iterator->node) return NULL;
+
     ngx_queue_t *q;
-    art_iterator *c;
-    art_node *n, *next;
-
-    q = ngx_queue_head(&iterator->queue);
-    c = ngx_queue_data(q, art_iterator, queue);
-    n = c->node;
-    if (!n) return NULL;
-
-    int idx;
+    art_iterator *current;
+    art_node *node;
     do {
-        next = NULL;
+        q = ngx_queue_head(&iterator->queue);
+        current = ngx_queue_data(q, art_iterator, queue);
+        node = iterator_get_child_node(current);
 
-	// get next node from current
-        switch (n->type) {
-            case NODE4:
-                for (; c->pos < n->num_children; c->pos++) {
-                    next = ((art_node4*)n)->children[c->pos];
-                    if (next) break;
-                }
-                break;
-
-            case NODE16:
-                for (; c->pos < n->num_children; c->pos++) {
-                    next = ((art_node16*)n)->children[c->pos];
-                    if (next) break;
-                }
-                break;
-
-            case NODE48:
-                for (; c->pos < 256; c->pos++) {
-                    idx = ((art_node48*)n)->keys[c->pos];
-                    if (!idx) continue;
-
-                    next = ((art_node48*)n)->children[idx-1];
-                    if (next) break;
-                }
-                break;
-
-            case NODE256:
-                for (; c->pos < 256; c->pos++) {
-                    next = ((art_node256*)n)->children[c->pos];
-                    if (next) break;
-                }
-                break;
-
-            default:
-                abort();
-        }
-        n = next;
-        c->pos++;
-
-        if (!n) {
-            // no child found
-            if (ngx_queue_empty(q)) {
-                // queue empty, work is done
-                return NULL;
-            }
-            // destroy current iterator
+        if ((node != NULL) & IS_LEAF(node)) {
+            // we found leaf, return it
+            return LEAF_RAW(node);
+        } else if (node) {
+            // we found node, go into it
+            current = malloc(sizeof(art_iterator));
+            current->pos = 0;
+            current->node = node;
+            ngx_queue_insert_tail(q, &current->queue);
+        } else if (!ngx_queue_empty(&iterator->queue)) {
+            // we found nothing, got to top
             ngx_queue_remove(q);
-            free(c);
-            // no children left, go to previous node
-            q = ngx_queue_head(&iterator->queue);
-            c = ngx_queue_data(q, art_iterator, queue);
-            n = c->node;
+            free(current);
             continue;
-        }
-
-        if (IS_LEAF(n)) {
-            // we found leaf, return
-            return LEAF_RAW(n);
         } else {
-            // we found node, go into
-            c = malloc(sizeof(art_iterator));
-            if (!c) return NULL;
-            c->pos = 0;
-            c->node = n;
-            ngx_queue_insert_tail(q, &c->queue);
-            q = &c->queue;
+            // work is done
+            return NULL;
         }
 
-    } while (1);
+    } while(1);
+
+    return NULL;
 }

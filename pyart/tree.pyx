@@ -1,4 +1,4 @@
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport free, calloc
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from cpython.list cimport PyList_New, PyList_SET_ITEM
 
@@ -87,7 +87,7 @@ cdef class Tree(object):
     cdef art_tree *_c_tree
 
     def __cinit__(self):
-        self._c_tree = <art_tree *>malloc(sizeof(art_tree))
+        self._c_tree = <art_tree *>calloc(1, sizeof(art_tree))
         if self._c_tree is NULL:
             raise MemoryError("Can't allocate memory for tree!")
         if init_art_tree(self._c_tree) != 0:
@@ -99,36 +99,54 @@ cdef class Tree(object):
             destroy_art_tree(self._c_tree)
             free(self._c_tree)
 
+    def __init__(self, *args, **kwargs):
+        self.update(*args, **kwargs)
+
     cdef Py_ssize_t size(self):
         return art_size(self._c_tree)
 
-    def __len__(self):
-        return self.size()
-
-    def __getitem__(self, bytes key not None):
+    cpdef get(self, bytes key, default=None):
         cdef char* c_key = key
         cdef Py_ssize_t length = len(key)
         cdef void* c_value = art_search(self._c_tree, c_key, length)
         if c_value is NULL:
+            if default is not None:
+                return default
             raise KeyError("Key {0!r} not found!".format(key))
         return <object>c_value
 
-    def __setitem__(self, bytes key not None, object value):
-        cdef char* c_key = key
-        cdef Py_ssize_t length = len(key)
-        Py_INCREF(value)
-        cdef void* c_value = art_insert(self._c_tree, c_key, length, <void *>value)
-        if c_value is not NULL:
-            Py_DECREF(<object>c_value)
-
-    def __delitem__(self, bytes key not None):
+    cpdef pop(self, bytes key, default=None):
         cdef char* c_key = key
         cdef Py_ssize_t length = len(key)
         cdef void* c_value = art_delete(self._c_tree, c_key, length)
         if c_value is NULL:
+            if default is not None:
+                return default
             raise KeyError("Key {0!r} not found!".format(key))
-        else:
-            Py_DECREF(<object>c_value)
+        Py_DECREF(<object>c_value)
+        return <object>c_value
+
+    cpdef replace(self, bytes key, object value):
+        cdef char* c_key = key
+        cdef Py_ssize_t length = len(key)
+        Py_INCREF(value)
+        cdef void* c_value = art_insert(self._c_tree, c_key, length, <void *>value)
+        if c_value is NULL:
+            return None
+        Py_DECREF(<object>c_value)
+        return <object>c_value
+
+    def __len__(self):
+        return self.size()
+
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def __setitem__(self, key, value):
+        self.replace(key, value)
+
+    def __delitem__(self, key):
+        self.pop(key)
 
     def __contains__(self, bytes key not None):
         cdef char* c_key = key
@@ -184,7 +202,10 @@ cdef class Tree(object):
         return populate_list(self.iteritems(), self.size())
 
     def update(self, *args, **kwargs):
-        for arg in args:
+        if args:
+            if len(args) != 1:
+                raise TypeError("Update excepted only 1 argument")
+            arg = args[0]
             if hasattr(arg, 'iteritems'):
                 arg = arg.iteritems()
             elif hasattr(arg, 'items'):
@@ -193,12 +214,6 @@ cdef class Tree(object):
                 self[key] = value
         for key, value in kwargs.items():
             self[key] = value
-
-    def get(self, bytes key not None, default=None):
-        try:
-            return self[key]
-        except KeyError:
-            return default
 
 
 cdef class Iterator(object):

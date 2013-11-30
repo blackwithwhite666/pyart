@@ -60,11 +60,21 @@ typedef struct {
 } art_node256;
 
 /**
+ * Union to access nodes
+ */
+typedef union {
+    art_node *node;
+    art_node4 *node4;
+    art_node16 *node16;
+    art_node48 *node48;
+    art_node256 *node256;
+} art_nodes;
+
+/**
  * Represents a leaf. These are
  * of arbitrary size, as they include the key.
  */
 typedef struct {
-    uint16_t ref_count;
     void *value;
     uint32_t key_len;
     unsigned char key[];
