@@ -156,3 +156,37 @@ class TestTree(TestCase):
 
     def test_empty_iter(self):
         self.assertEqual([], list(self.tree))
+
+    def test_update_using_kwargs(self):
+        self.tree.update(foo=1, bar=2)
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            self.tree.items()
+        )
+
+    def test_update_using_dict(self):
+        d = dict(foo=1, bar=2)
+        self.tree.update(d)
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            self.tree.items()
+        )
+
+    def test_update_using_list(self):
+        l = [(b'foo', 1), (b'bar', 2)]
+        self.tree.update(l)
+        self.assertEqual(
+            [(b'bar', 2), (b'foo', 1)],
+            self.tree.items()
+        )
+
+    def test_update_using_wrong_list(self):
+        l = [1, 2]
+        with self.assertRaises(TypeError):
+            self.tree.update(l)
+
+    def test_get(self):
+        self.tree.update(foo=1)
+        self.assertEqual(1, self.tree.get(b'foo'))
+        self.assertIsNone(self.tree.get(b'bar'))
+        self.assertEqual(2, self.tree.get(b'bar', 2))

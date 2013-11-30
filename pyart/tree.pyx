@@ -183,6 +183,23 @@ cdef class Tree(object):
     def items(self):
         return populate_list(self.iteritems(), self.size())
 
+    def update(self, *args, **kwargs):
+        for arg in args:
+            if hasattr(arg, 'iteritems'):
+                arg = arg.iteritems()
+            elif hasattr(arg, 'items'):
+                arg = arg.items()
+            for key, value in arg:
+                self[key] = value
+        for key, value in kwargs.items():
+            self[key] = value
+
+    def get(self, bytes key not None, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
 
 cdef class Iterator(object):
     cdef art_iterator *_c_iterator
