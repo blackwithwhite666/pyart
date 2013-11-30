@@ -153,3 +153,6 @@ class TestTree(TestCase):
             [(b'bar', 2), (b'foo', 1)],
             self.tree.items()
         )
+
+    def test_empty_iter(self):
+        self.assertEqual([], list(self.tree))

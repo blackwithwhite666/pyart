@@ -1043,12 +1043,13 @@ art_leaf* art_iterator_next(art_iterator *iterator) {
     q = ngx_queue_head(&iterator->queue);
     c = ngx_queue_data(q, art_iterator, queue);
     n = c->node;
+    if (!n) return NULL;
 
     int idx;
     do {
         next = NULL;
 
-        // get next node from current
+	// get next node from current
         switch (n->type) {
             case NODE4:
                 for (; c->pos < n->num_children; c->pos++) {
