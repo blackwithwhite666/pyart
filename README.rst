@@ -2,9 +2,15 @@
 pyart - Adaptive Radix Tree
 =================================================
 
-CI status: |cistatus|
+|travis| |bitdeli|
 
-.. |cistatus| image:: https://secure.travis-ci.org/blackwithwhite666/pyart.png?branch=master
+.. |travis| image:: https://secure.travis-ci.org/blackwithwhite666/pyart.png?branch=master
+   :alt: Travis badge
+   :target: https://travis-ci.org/blackwithwhite666/pyart
+
+.. |bitdeli| image:: https://d2weczhvl823v0.cloudfront.net/blackwithwhite666/pyart/trend.png
+   :alt: Bitdeli badge
+   :target: https://bitdeli.com/free
 
 This library is a thin python wrapper around ART implementation in https://raw.github.com/armon/hlld
 
@@ -115,10 +121,3 @@ Use Tox to run the test suite:
 ::
 
     tox
-
-
-
-.. image:: https://d2weczhvl823v0.cloudfront.net/blackwithwhite666/pyart/trend.png
-   :alt: Bitdeli badge
-   :target: https://bitdeli.com/free
-
