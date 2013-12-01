@@ -1,6 +1,6 @@
 """Adaptive Radix Tree (ART) implemetation for python."""
 
-VERSION = (0, 2, 0)
+VERSION = (0, 2, 1)
 
 __version__ = '.'.join(map(str, VERSION[0:3]))
 __author__ = 'Lipin Dmitriy'

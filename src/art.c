@@ -1002,11 +1002,12 @@ art_iterator* create_art_iterator(art_tree *tree) {
 /**
  * Remove all queue's element and free memory.
  */
-static void destroy_queue(ngx_queue_t *queue) {
+static void destroy_queue(ngx_queue_t *h) {
     ngx_queue_t *q;
     art_iterator *iterator;
 
-    ngx_queue_foreach(q, queue) {
+    while(!ngx_queue_empty(h)) {
+        q = ngx_queue_head(h);
         iterator = ngx_queue_data(q, art_iterator, queue);
         ngx_queue_remove(q);
         free(iterator);

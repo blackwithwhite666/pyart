@@ -171,6 +171,15 @@ class TestTree(TestCase):
         self.assertEqual([], tree.keys())
         self.assertEqual([], tree.values())
 
+    def test_big_iter(self):
+        d = {str(i): i for i in xrange(1024)}
+        tree = Tree()
+        tree.update(d)
+        self.assertEqual(
+            sorted(d.keys()),
+            tree.keys(),
+        )
+
     def test_update_using_kwargs(self):
         self.tree.update(
             foo=1, bar=2, foobar=3, beer=4)
