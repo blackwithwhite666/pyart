@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.2.3
+-----
+
+- Fix reference counting;
+
 0.2.2
 -----
 

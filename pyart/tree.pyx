@@ -123,8 +123,9 @@ cdef class Tree(object):
             if default is not None:
                 return default
             raise KeyError("Key {0!r} not found!".format(key))
-        Py_DECREF(<object>c_value)
-        return <object>c_value
+        cdef object obj = <object>c_value
+        Py_DECREF(obj)
+        return obj
 
     cpdef replace(self, bytes key, object value):
         cdef char* c_key = key
@@ -133,8 +134,9 @@ cdef class Tree(object):
         cdef void* c_value = art_insert(self._c_tree, c_key, length, <void *>value)
         if c_value is NULL:
             return None
-        Py_DECREF(<object>c_value)
-        return <object>c_value
+        cdef object obj = <object>c_value
+        Py_DECREF(obj)
+        return obj
 
     def __len__(self):
         return self.size()

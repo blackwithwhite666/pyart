@@ -926,7 +926,12 @@ static art_node* recursive_copy(art_node *n) {
         return n;
     }
 
-    art_nodes p;
+    union {
+        art_node4 *node4;
+        art_node16 *node16;
+        art_node48 *node48;
+        art_node256 *node256;
+    } p;
     switch (n->type) {
         case NODE4:
             p.node4 = alloc_node4();
