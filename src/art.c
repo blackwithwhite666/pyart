@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
@@ -995,6 +996,7 @@ art_iterator* create_art_iterator(art_tree *tree) {
     }
     iterator->node = tree->root;
     iterator->pos = 0;
+    iterator->is_leaf = false;
     ngx_queue_init(&iterator->queue);
     return iterator;
 }
@@ -1026,9 +1028,17 @@ int destroy_art_iterator(art_iterator *iterator) {
 
 // get next child of node
 static inline art_node* iterator_get_child_node(art_iterator *iterator) {
-    int idx;
     art_node *next, *node;
     node = iterator->node;
+
+    if (IS_LEAF(node)) {
+        // node is leaf
+        if (iterator->is_leaf) return NULL;
+        iterator->is_leaf = true;
+        return node;
+    }
+
+    int idx;
     next = NULL;
     switch (node->type) {
         case NODE4:
@@ -1090,6 +1100,7 @@ art_leaf* art_iterator_next(art_iterator *iterator) {
             // we found node, go into it
             current = malloc(sizeof(art_iterator));
             current->pos = 0;
+            current->is_leaf = false;
             current->node = node;
             ngx_queue_insert_tail(q, &current->queue);
         } else if (!ngx_queue_empty(&iterator->queue)) {

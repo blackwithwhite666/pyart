@@ -180,6 +180,13 @@ class TestTree(TestCase):
             tree.keys(),
         )
 
+    def test_iter_from_single(self):
+        self.tree['gutenberg'] = None
+        self.assertEqual(
+            ['gutenberg'],
+            self.tree.keys(),
+        )
+
     def test_update_using_kwargs(self):
         self.tree.update(
             foo=1, bar=2, foobar=3, beer=4)

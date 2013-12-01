@@ -1,7 +1,12 @@
 Changelog
 =========
 
-0.2.0
+0.2.2
+-----
+
+- Fix iteration with single element;
+
+0.2.1
 -----
 
 - Fix segmentation fault on iterator destruction;

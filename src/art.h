@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include "ngx-queue.h"
 #ifndef ART_H
 #define ART_H
@@ -95,6 +96,7 @@ typedef struct {
     art_node *node;
     uint32_t pos;
     ngx_queue_t queue;
+    bool is_leaf;
 } art_iterator;
 
 
